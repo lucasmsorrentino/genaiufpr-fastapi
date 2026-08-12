@@ -1,0 +1,10 @@
+name: clima_api
+channels:
+  # fastapi/uvicorn não existem no canal `defaults`; vêm do conda-forge.
+  - conda-forge
+dependencies:
+  # 3.14 ainda não tem build dos pacotes abaixo no conda-forge — 3.11 resolve.
+  - python=3.11
+  - fastapi
+  - requests
+  - uvicorn
