@@ -51,7 +51,7 @@ publicada em **duas máquinas** na Oracle Cloud conforme a sugestão 3a da aula:
 VM contém o modelo e **não expõe nenhuma porta à internet**, outra hospeda a API
 pública que conversa com ela pela rede privada.
 
-Aplicação no ar: <http://146.235.48.69:8000>
+Aplicação no ar: <https://ufpr-rag.tail9f5159.ts.net>
 
 ## Notas de implementação
 
