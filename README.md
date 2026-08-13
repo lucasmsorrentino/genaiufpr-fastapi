@@ -125,20 +125,14 @@ detalhe.
 
 ## Notas de implementação
 
-### Três bugs que impediam o build original
-
 Ficam registrados porque são armadilhas comuns:
 
 - **`CMD` em JSON quebrado em duas linhas** — o array precisa de `\` na quebra,
   senão o Docker não consegue parsear a forma exec.
-- **`uvicorn clima_api:app`** — `clima_api` é o nome do *ambiente conda* (`-n`),
-  não do módulo. O arquivo é `api.py`, logo `api:app`.
 - **arquivo `dockerfile` em minúsculo** — o `docker build` procura `Dockerfile`.
   Passa despercebido no Windows (sistema de arquivos sem distinção de caixa) e
   falha no Linux do servidor.
-
-Além disso, o canal `defaults` do conda não tem `fastapi` nem `uvicorn`, e não
-havia build de `python=3.14` para eles — daí `conda-forge` e `python=3.11`.
+  
 
 ### Três ajustes por estar exposta na internet
 
@@ -147,39 +141,31 @@ O código da aula é correto para rodar em `localhost`. Publicado, ganhou:
 - **Falha do upstream vira `502`** — um timeout da open-meteo subia como exceção
   não tratada, o cliente recebia `500` e o traceback registrava a URL e os
   parâmetros da chamada interna.
-- **Teto de tamanho no `nome_cidade`** — a entrada é repassada a um serviço de
-  terceiro; aceitar string de tamanho arbitrário é repassar o abuso adiante.
-- **Rate limit** (60/min) — cada chamada consome a cota gratuita da open-meteo.
-  Sem teto, uma rajada de terceiros gastaria a cota do servidor, ou renderia um
-  bloqueio do IP, sem que o dono percebesse.
+- **Teto de tamanho no `nome_cidade`** — para dirmir abuso do serviço.
+- **Rate limit** (60/min) — Medida para reduzir a chance de bloqueio do IP.
 
-### O que a medição mostrou sobre o rate limit
+### Sobre o rate limit
 
-A intenção era limitar **por visitante**. Medindo, não dá — e o motivo tem duas
-camadas, ambas invisíveis em `localhost`:
+A intenção limitar **por visitante** não se mostrou possível:
 
 1. **O Docker esconde o par da conexão.** O container é publicado em
    `127.0.0.1:8001`, mas dentro dele a origem aparece como `172.17.0.1`, o
    gateway da bridge: o pacote sofre NAT antes de entrar. Uma verificação do
    tipo `if ip == "127.0.0.1"` nunca é verdadeira ali dentro.
-2. **O Funnel não preserva o IP do visitante.** O `X-Forwarded-For` chega com o
-   endereço do relay de entrada da Tailscale — um `100.x` constante, e
-   diferente do IP da própria VM no tailnet. Três chamadas de máquinas
-   diferentes produzem o mesmo valor.
+2. **O Funnel não preserva o IP do visitante.** .
 
-O `/health` devolve o IP detectado justamente para tornar isso verificável:
+O `/health` devolve o IP detectado na tentativa de tornar isso verificável.
 
 ```bash
 curl https://ufpr-rag.tail9f5159.ts.net:8443/health
 # {"status":"ok","cliente":"100.66.216.50"}   <- o relay, não quem chamou
 ```
 
-Então o limite é **global**, não por visitante. Ele ainda cumpre o objetivo
-principal — proteger a cota da open-meteo e uma VM de 1 GB de RAM contra um
-laço descontrolado — mas não isola um abusador dos demais, e por isso o teto é
-folgado. A leitura do cabeçalho fica no código porque é o comportamento correto
-atrás de um proxy que preserve o IP, e é aceita apenas quando o par da conexão
-é privado, de modo que não pode ser forjada pela internet.
+Então o limite é **global**, não por visitante, no intento de proteger tanto a 
+cota da open-meteo como VM de 1 GB de RAM. A leitura do cabeçalho fica 
+no código porque é o comportamento correto atrás de um proxy que preserve o IP,
+e é aceita apenas quando o par da conexão é privado, de modo que não pode ser 
+forjada pela internet.
 
 É a contrapartida honesta de publicar sem abrir porta: o preço de não ter
 superfície exposta é não enxergar quem está do outro lado.
