@@ -44,12 +44,18 @@ curl "https://ufpr-rag.tail9f5159.ts.net:8443/temperatura-cidade?nome_cidade=Cur
 Cidade inexistente devolve **404** com mensagem; open-meteo fora do ar devolve
 **502**; rajada de chamadas devolve **429**. Nenhum desses vira um 500 opaco.
 
-**Nomes ambíguos** são resolvidos pela cidade mais populosa. O geocoding ordena
-por relevância textual, então `Lisboa` com `count=1` respondia a homônima em
-Moçambique, e não a capital de Portugal. A busca pede vários resultados e
-desempata pela população. Continua sendo uma heurística: para uma cidade pequena
-que divide o nome com uma grande, a resposta será a grande — resolver isso de
-verdade exigiria receber país ou coordenadas como parâmetro.
+**Limitação conhecida: o nome resolve pelo índice do open-meteo, não por fama.**
+`Lisboa` responde de Moçambique — não por erro de desempate, mas porque a
+capital portuguesa está indexada como `Lisbon`, e todos os homônimos retornados
+são de fato outros lugares chamados Lisboa. O mesmo vale para `Londres`
+(devolve a da Argentina; a inglesa é `London`).
+
+Tentei corrigir isso desempatando pela cidade mais populosa e **desfiz**: em 12
+nomes ambíguos testados a escolha mudou em 2, e nas duas para pior — `Salvador`
+passou a devolver *El Salvador*, o país, em vez da cidade da Bahia, e `Valencia`
+trocou a Espanha pela Venezuela. A ordenação do próprio open-meteo pondera
+melhor que população sozinha. Resolver de verdade exigiria aceitar país ou
+coordenadas como parâmetro, o que sai do escopo do exercício.
 
 ---
 
