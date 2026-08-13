@@ -4,6 +4,7 @@ Consome duas APIs abertas da open-meteo: primeiro o geocoding, para converter o
 nome da cidade em coordenadas, depois a previsão para essas coordenadas.
 """
 
+import ipaddress
 import os
 import threading
 import time
@@ -34,16 +35,33 @@ app = FastAPI(
 )
 
 
+def _proxy_confiavel(ip: str) -> bool:
+    """O par da conexão é um proxy local, e não um cliente da internet?
+
+    O container é publicado em `127.0.0.1:8001` do host, então a única origem
+    possível é o proxy do próprio host, que chega pelo gateway da bridge do
+    Docker (`172.17.0.1`) — endereço privado, nunca `127.0.0.1`, porque o pacote
+    é traduzido por NAT antes de entrar no container. Aceitar apenas origens
+    privadas cobre esse caso sem abrir mão da garantia: um cliente da internet
+    jamais aparece como par aqui.
+    """
+    try:
+        endereco = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return endereco.is_loopback or endereco.is_private
+
+
 def _ip_do_cliente(request: Request) -> str:
     """IP real de quem chamou.
 
-    O tráfego público chega pelo Tailscale Funnel, que entrega em 127.0.0.1: sem
-    olhar o `X-Forwarded-For`, todo mundo viraria o mesmo cliente e o limite por
-    IP viraria um limite global. O cabeçalho só é aceito quando quem conecta é o
-    próprio loopback (o proxy local), então não dá para forjá-lo de fora.
+    O tráfego público chega pelo Tailscale Funnel, que entrega a requisição no
+    loopback do host: sem olhar o `X-Forwarded-For`, todo mundo viraria o mesmo
+    cliente e o limite por IP seria, na prática, um limite global. O cabeçalho é
+    aceito só quando o par é um proxy local, então não dá para forjá-lo de fora.
     """
     par = request.client.host if request.client else ""
-    if par in ("127.0.0.1", "::1"):
+    if _proxy_confiavel(par):
         encaminhado = request.headers.get("x-forwarded-for", "")
         if encaminhado:
             return encaminhado.split(",")[0].strip()
