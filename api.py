@@ -123,7 +123,7 @@ def _consultar(url: str, params: dict) -> dict:
 def temperatura_cidade(
     nome_cidade: str = Query(min_length=1, max_length=80, description="Nome da cidade"),
 ):
-    geo = _consultar(GEO_URL, {"name": nome_cidade, "count": 1})
+    geo = _consultar(GEO_URL, {"name": nome_cidade, "count": 10})
     resultados = geo.get("results")
     # Cidade inexistente devolve {} sem a chave "results": sem esta guarda, o
     # acesso a results[0] estoura IndexError e o cliente recebe um 500 opaco.
@@ -132,7 +132,12 @@ def temperatura_cidade(
             status_code=404, detail=f"Cidade não encontrada: {nome_cidade}"
         )
 
-    local = resultados[0]
+    # O geocoding ordena por relevância textual, não por tamanho: com `count=1`,
+    # "Lisboa" resolvia para a homônima em Moçambique, não para a capital de
+    # Portugal. Pedir várias e desempatar pela população faz um nome ambíguo
+    # cair na cidade que quem perguntou provavelmente tinha em mente. Sem o
+    # campo `population`, o `or 0` preserva a ordem original do serviço.
+    local = max(resultados, key=lambda r: r.get("population") or 0)
     previsao = _consultar(
         WEATHER_URL,
         {

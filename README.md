@@ -44,6 +44,13 @@ curl "https://ufpr-rag.tail9f5159.ts.net:8443/temperatura-cidade?nome_cidade=Cur
 Cidade inexistente devolve **404** com mensagem; open-meteo fora do ar devolve
 **502**; rajada de chamadas devolve **429**. Nenhum desses vira um 500 opaco.
 
+**Nomes ambíguos** são resolvidos pela cidade mais populosa. O geocoding ordena
+por relevância textual, então `Lisboa` com `count=1` respondia a homônima em
+Moçambique, e não a capital de Portugal. A busca pede vários resultados e
+desempata pela população. Continua sendo uma heurística: para uma cidade pequena
+que divide o nome com uma grande, a resposta será a grande — resolver isso de
+verdade exigiria receber país ou coordenadas como parâmetro.
+
 ---
 
 ## Rodando localmente
