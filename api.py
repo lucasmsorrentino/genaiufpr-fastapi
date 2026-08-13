@@ -125,5 +125,8 @@ def temperatura_cidade(
 
 
 @app.get("/health")
-def health():
-    return {"status": "ok"}
+def health(request: Request):
+    # `cliente` devolve o IP que o rate limit está usando como chave. Atrás de um
+    # proxy é o único jeito barato de saber se o encaminhamento está correto: se
+    # aparecer 127.0.0.1 aqui, o limite virou global em vez de por IP.
+    return {"status": "ok", "cliente": _ip_do_cliente(request)}
