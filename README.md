@@ -136,12 +136,37 @@ O código da aula é correto para rodar em `localhost`. Publicado, ganhou:
   parâmetros da chamada interna.
 - **Teto de tamanho no `nome_cidade`** — a entrada é repassada a um serviço de
   terceiro; aceitar string de tamanho arbitrário é repassar o abuso adiante.
-- **Rate limit por IP** (30/min) — cada chamada consome a cota gratuita da
-  open-meteo. Sem teto, uma rajada de terceiros gastaria a cota do servidor, ou
-  renderia um bloqueio do IP, sem que o dono percebesse.
+- **Rate limit** (60/min) — cada chamada consome a cota gratuita da open-meteo.
+  Sem teto, uma rajada de terceiros gastaria a cota do servidor, ou renderia um
+  bloqueio do IP, sem que o dono percebesse.
 
-O rate limit tem um detalhe que só aparece atrás de proxy: o Funnel entrega o
-tráfego em `127.0.0.1`, então todo cliente chegaria com o mesmo IP e o limite
-"por IP" viraria um limite global. O IP real vem do `X-Forwarded-For`, aceito
-**apenas** quando quem conecta é o loopback — de fora, o cabeçalho não pode ser
-forjado, porque a única entrada é o proxy local.
+### O que a medição mostrou sobre o rate limit
+
+A intenção era limitar **por visitante**. Medindo, não dá — e o motivo tem duas
+camadas, ambas invisíveis em `localhost`:
+
+1. **O Docker esconde o par da conexão.** O container é publicado em
+   `127.0.0.1:8001`, mas dentro dele a origem aparece como `172.17.0.1`, o
+   gateway da bridge: o pacote sofre NAT antes de entrar. Uma verificação do
+   tipo `if ip == "127.0.0.1"` nunca é verdadeira ali dentro.
+2. **O Funnel não preserva o IP do visitante.** O `X-Forwarded-For` chega com o
+   endereço do relay de entrada da Tailscale — um `100.x` constante, e
+   diferente do IP da própria VM no tailnet. Três chamadas de máquinas
+   diferentes produzem o mesmo valor.
+
+O `/health` devolve o IP detectado justamente para tornar isso verificável:
+
+```bash
+curl https://ufpr-rag.tail9f5159.ts.net:8443/health
+# {"status":"ok","cliente":"100.66.216.50"}   <- o relay, não quem chamou
+```
+
+Então o limite é **global**, não por visitante. Ele ainda cumpre o objetivo
+principal — proteger a cota da open-meteo e uma VM de 1 GB de RAM contra um
+laço descontrolado — mas não isola um abusador dos demais, e por isso o teto é
+folgado. A leitura do cabeçalho fica no código porque é o comportamento correto
+atrás de um proxy que preserve o IP, e é aceita apenas quando o par da conexão
+é privado, de modo que não pode ser forjada pela internet.
+
+É a contrapartida honesta de publicar sem abrir porta: o preço de não ter
+superfície exposta é não enxergar quem está do outro lado.

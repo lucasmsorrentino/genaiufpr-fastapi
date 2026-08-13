@@ -20,8 +20,9 @@ TIMEOUT_S = 10
 # Esta API está publicada na internet e repassa cada chamada para a open-meteo,
 # que é gratuita e tem política de uso justo. Sem teto, uma rajada de terceiros
 # gastaria a cota do servidor (ou renderia um bloqueio do IP) sem que o dono
-# percebesse.
-LIMITE_POR_MINUTO = int(os.getenv("RATE_LIMIT", "30"))
+# percebesse. O teto é folgado de propósito: ver `_ip_do_cliente`, o tráfego
+# público não é separável por visitante, então este limite é global.
+LIMITE_POR_MINUTO = int(os.getenv("RATE_LIMIT", "60"))
 _JANELA_S = 60.0
 _SWEEP_S = 300.0
 _hits: dict[str, deque] = defaultdict(deque)
@@ -53,12 +54,20 @@ def _proxy_confiavel(ip: str) -> bool:
 
 
 def _ip_do_cliente(request: Request) -> str:
-    """IP real de quem chamou.
+    """Melhor identificação disponível de quem chamou.
 
-    O tráfego público chega pelo Tailscale Funnel, que entrega a requisição no
-    loopback do host: sem olhar o `X-Forwarded-For`, todo mundo viraria o mesmo
-    cliente e o limite por IP seria, na prática, um limite global. O cabeçalho é
-    aceito só quando o par é um proxy local, então não dá para forjá-lo de fora.
+    Medido nesta instalação: o Tailscale Funnel **não** preserva o IP do
+    visitante. O `X-Forwarded-For` chega com o endereço do relay de entrada da
+    Tailscale (um `100.x` constante, diferente do IP da própria VM no tailnet),
+    e não com o de quem abriu a página. Ou seja, para o tráfego público o limite
+    abaixo é **global**, não por visitante: ele cumpre o objetivo principal —
+    proteger a cota da open-meteo e uma VM de 1 GB de RAM — mas não isola um
+    abusador dos demais.
+
+    A leitura do cabeçalho fica de pé porque é o comportamento correto atrás de
+    um proxy que preserve o IP (nginx, Caddy, um load balancer), e porque sem
+    ela a chave seria o gateway da bridge do Docker, que informa ainda menos.
+    Aceito só quando o par é um proxy local, então não dá para forjá-lo de fora.
     """
     par = request.client.host if request.client else ""
     if _proxy_confiavel(par):
